@@ -9,8 +9,8 @@ rule trimming:
 	"samples/fastqc/{sample}_R2_val_2_fastqc.zip",
         "samples/fastqc/{sample}_R1_val_1_fastqc.html",
 	"samples/fastqc/{sample}_R2_val_2_fastqc.html",
-        "samples/trimmed/{sample}_R1.fq.gz_trimming_report.txt",
-	"samples/trimmed/{sample}_R2.fq.gz_trimming_report.txt"
+#        "samples/trimmed/{sample}_R1.fq.gz_trimming_report.txt",
+#	"samples/trimmed/{sample}_R2.fq.gz_trimming_report.txt"
     params:
         adapter = config["adapter"]
     conda:
@@ -56,6 +56,86 @@ rule Hisat2:
 	samtools view -S -b samples/hisat2/{wildcards.sample}_output.sam > {output}         
         rm samples/hisat2/{wildcards.sample}_output.sam
         """
+
+#rule RPKM_sat:
+#    input:
+#        "samples/hisat2/{sample}_output.bam"
+#    output:
+#        "samples/hisat2/{sample}.saturation.pdf"
+#    params:
+#        ref=config["rseqc_bed"]
+#    conda:
+#        "../envs/RSeQC.yaml"
+#    shell:
+#        "RPKM_saturation.py -r {params.ref} -i {input} -o samples/hisat2/{wildcards.sample}" 
+
+#rule RPKM_sat:
+#    input:
+#        expand("samples/hisat2/{sample}_output.bam", sample = SAMPLES)
+#    output:
+#        "samples/hisat2/{sample}.saturation.pdf"
+#        "donefile.txt"
+#    params:
+#        ref=config["rseqc_bed"]
+#    conda:
+#        "../envs/RSeQC.yaml"
+#    shell:
+#        """
+#        basename=`ls -1 samples/hisat2/*.bam | cut -f3 -d "/" | cut -f1 -d "_" | sort | uniq`
+#        echo $basename
+#        for name in $basename; do
+#        echo $name 
+#        test=`ls -1 samples/hisat2/*.bam | grep $name` 
+#        echo $test
+#        echo $name
+#        samtools merge samples/hisat2/${{name}}_merged.bam $test
+#        RPKM_saturation.py -r {params.ref} -i samples/hisat2/${{name}}_merged.bam -o samples/hisat2/${{name}}_merged
+#        done
+#        touch donefile.txt
+#        """
+
+checkpoint merge_bam:
+    input:
+        expand("samples/hisat2/{sample}_output.bam", sample = SAMPLES)
+    output:
+        directory("tmp/merged_bams")
+    shell:
+        """
+        mkdir -p tmp/merged_bams
+        basename=`ls -1 samples/hisat2/*.bam | cut -f3 -d "/" | cut -f1 -d "_" | sort | uniq`
+        for name in $basename; do
+        test=`ls -1 samples/hisat2/*.bam | grep $name` 
+        samtools merge -f tmp/merged_bams/${{name}}_merged.bam $test
+        done
+        """
+
+rule RPKM_sat:
+    input:
+        "tmp/merged_bams/{name}_merged.bam"
+    output:
+        "samples/hisat2/{name}_merged.saturation.r"
+    params:
+        ref=config["rseqc_bed"]
+    conda:
+        "../envs/RSeQC.yaml"
+    shell:
+        """
+        RPKM_saturation.py -r {params.ref} -i {input} -o samples/hisat2/{wildcards.name}_merged
+        rm {input}
+        """
+
+def aggregate_saturation(wildcards):
+    checkpoint_output = checkpoints.merge_bam.get(**wildcards).output[0]
+    return expand("samples/hisat2/{name}_merged.saturation.r",
+           name=glob_wildcards(os.path.join(checkpoint_output, "{name}_merged.bam")).name)
+
+rule aggregate_RPKM:
+     input:
+         aggregate_saturation
+     output:
+         "samples/hisat2/all_merged.saturation.r"
+     shell:
+         "cat {input} > {output}"
 
 rule feature_count:
     input:
