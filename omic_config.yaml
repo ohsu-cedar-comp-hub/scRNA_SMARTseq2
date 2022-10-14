@@ -4,19 +4,19 @@
 
 # GTF file for the genome build you would like to use
 gtf_file:
-  /home/groups/CEDAR/anno/gtf/hg19_ens87.chr.gtf
+  /home/groups/CEDAR/anno/gtf/hg38_ens94.chr.gtf
 # Bed file for rseqc function read_distribution
 bed_file:
-  /home/groups/CEDAR/anno/gtf/hg19_ens87.chr.bed
+  /home/groups/CEDAR/anno/gtf/hg38_ens94.chr.bed
 # Pre-built hisat indexes for hg19
 hisat2_index:
-  /home/groups/CEDAR/anno/indices/hisat2/hg19/hg19index
+  /home/groups/CEDAR/anno/indices/hisat2/hg38/hg38index
 filter_anno:
-  /home/groups/CEDAR/anno/biomaRt/hg19.Ens_87.biomaRt.geneAnno.Rdata
+  /home/groups/CEDAR/anno/biomaRt/hg38.Ens_94.biomaRt.geneAnno.Rdata
 barcode_file:
-  /home/groups/CEDAR/anno/biomaRt/hg19.Ens_87.biomaRt.geneAnno.Rdata
+  /home/groups/CEDAR/anno/biomaRt/hg38.Ens_94.biomaRt.geneAnno.Rdata
 rseqc_bed:
-  /home/groups/CEDAR/anno/gtf/hg19_Ensembl_gene.bed
+  /home/groups/CEDAR/anno/gtf/hg38_RefSeq.bed
  
 ####################################################################
 # Tool-specific files that will not change from project-to-project
