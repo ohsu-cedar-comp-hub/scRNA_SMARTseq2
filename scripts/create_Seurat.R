@@ -106,6 +106,7 @@ library(cowplot)
 library(png)
 library(dplyr)
 library(stringr)
+library(SeuratObject)
 
 barplot_theme <- function() {
   p <- theme(
@@ -160,11 +161,9 @@ feature_metadata$gene_unique <- rownames(SO)
 ctr <- 0
 SO@meta.data$origin <- str_extract(rownames(SO@meta.data), "[^_]+")
 
-cell_count_preQC <- table(SO$origin)
-
 SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, pattern = "^MT-")
 #SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, features = mt)
-SO$percent.mt[which(is.na(SO$percent.mt))] <- 0
+
 
 plotlist <- VlnPlot(object=SO, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 title <- ggdraw() + draw_label(paste0("Total Cells: ", ncol(SO)))
@@ -274,7 +273,6 @@ if (opts$integrate) {
     ## Calculate quality metrics ##
     SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, pattern = "^MT-")
     #SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, features = mt)
-    SO$percent.mt[which(is.na(SO$percent.mt))] <- 0
 
     png(sub("$", "/pre_QCviolin.png", io$plotDir))
     VlnPlot(object=SO, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
@@ -389,12 +387,6 @@ title <- ggdraw() + draw_label(paste0("Total Cells Passing QC: ", ncol(SO)))
 png(paste0(io$plotDir, "/post_QCviolin.png"))
 cowplot::plot_grid(title, plotlist, ncol=1, rel_heights = c(0.1,1))
 dev.off()
-
-cell_count_postQC <- table(SO$origin)
-
-cell_count_df <- as.data.frame(rbind(cell_count_preQC, cell_count_postQC))
-
-write.table(cell_count_df, "data/seurat/cell_counts.tsv", quote = F, sep = "\t")
 
 ## cell cycle scoring
 cc_genes  <- read.table("data/regev_lab_cell_cycle_genes.txt")
@@ -532,8 +524,34 @@ png(sub("$", "/post_DEheatmap_CCreduced.png", io$plotDir))
 DoHeatmap(CC_SO, features = top10$gene) + NoLegend()
 dev.off()
 
+hbca <- readRDS("data/hbca.rds")
+
+single_sample_label_transfer<-function(dat,ref_obj,ref_prefix){
+  transfer.anchors <- FindTransferAnchors(
+    reference = ref_obj,
+    reference.assay="RNA",
+    query = dat,
+    query.assay="RNA",
+    features=VariableFeatures(ref_obj),
+    verbose=T
+  )
+  predictions<- TransferData(
+    anchorset = transfer.anchors,
+    refdata = ref_obj$celltype,
+    k.weight = 25
+  )
+  colnames(predictions)<-paste0(ref_prefix,"_",colnames(predictions))
+  dat<-AddMetaData(dat,metadata=predictions)
+  return(dat)
+}
+
+SO <- single_sample_label_transfer(SO, hbca, "HBCA")
+
+CC_SO <- single_sample_label_transfer(CC_SO, hbca, "HBCA")
+
 ## Save Seurat Object ##
 saveRDS(SO, io$out.file)
 
 ## Save CC reduced Seurat Object ##
 saveRDS(CC_SO, io$out.file.CCred)
+
