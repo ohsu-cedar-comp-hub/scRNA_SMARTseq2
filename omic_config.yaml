@@ -53,7 +53,7 @@ project_id:
   CHC_030220
 # Genome assembly used for GO analysis, format must be as below, with the genome assembly first, and the version of ensembl second, separated by a period.
 assembly:
-  hg19
+  hg38
 # remove mito genes (1/0)
 mito:
   0
