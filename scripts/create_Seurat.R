@@ -97,6 +97,13 @@ if(!( file.exists( io$plotDir ) ) ) {
     dir.create( io$plotDir, FALSE, TRUE )  
 }
 
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager", repos="https://ftp.osuosl.org/pub/cran/")
+
+if ("org.Hs.eg.db" %in% rownames(installed.packages()) == FALSE) {
+    BiocManager::install("org.Hs.eg.db")
+}
+    
 library(Seurat)
 library(data.table)
 library(purrr)
@@ -107,6 +114,7 @@ library(png)
 library(dplyr)
 library(stringr)
 library(SeuratObject)
+library(org.Hs.eg.db)
 
 barplot_theme <- function() {
   p <- theme(
@@ -164,13 +172,14 @@ SO@meta.data$origin <- str_extract(rownames(SO@meta.data), "[^_]+")
 SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, pattern = "^MT-")
 #SO[["percent.mt"]] <- PercentageFeatureSet(object = SO, features = mt)
 
-
 plotlist <- VlnPlot(object=SO, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 title <- ggdraw() + draw_label(paste0("Total Cells: ", ncol(SO)))
 
 png(paste0(io$plotDir, "/pre_QCviolin.png"))
 cowplot::plot_grid(title, plotlist, ncol=1, rel_heights = c(0.1,1))
 dev.off()
+
+cellQC_table <- data.frame(Cell=colnames(SO), Pass = FALSE)
 
 filtSO.list <- list()
 
@@ -388,6 +397,10 @@ png(paste0(io$plotDir, "/post_QCviolin.png"))
 cowplot::plot_grid(title, plotlist, ncol=1, rel_heights = c(0.1,1))
 dev.off()
 
+cellQC_table$Pass[cellQC_table$Cell %in% colnames(SO)] <- TRUE
+
+write.table(cellQC_table, "data/seurat/cellQC_table.tsv", sep = "\t", quote = F, row.names = F)
+
 ## cell cycle scoring
 cc_genes  <- read.table("data/regev_lab_cell_cycle_genes.txt")
 s.genes   <- cc_genes$V1[1:43]
@@ -507,7 +520,7 @@ dev.off()
 ## Find DE genes
 
 SO.markers <- FindAllMarkers(SO, logfc.threshold = 0.2)
-top10      <- SO.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top10      <- SO.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
 write.table(SO.markers, file = "data/seurat/post_DEgenes.tsv", sep = "\t", row.names=F, quote=F)
 
 png(sub("$", "/post_DEheatmap.png", io$plotDir))
@@ -517,14 +530,34 @@ dev.off()
 ## Find DE genes for CC reduced ##
 
 CC_SO.markers <- FindAllMarkers(CC_SO, logfc.threshold = 0.2)
-top10      <- CC_SO.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+top10      <- CC_SO.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
 write.table(CC_SO.markers, file = "data/seurat/post_DEgenes_CCreduced.tsv", sep = "\t", row.names=F, quote=F)
 
 png(sub("$", "/post_DEheatmap_CCreduced.png", io$plotDir))
 DoHeatmap(CC_SO, features = top10$gene) + NoLegend()
 dev.off()
 
-hbca <- readRDS("data/hbca.rds")
+hbca <- readRDS("/home/groups/CEDAR/anno/ref_seurat/hbca.rds")
+
+gene_names<-select(org.Hs.eg.db, keys = row.names(hbca@assays$RNA), keytype = 'ENSEMBL', columns = 'SYMBOL')
+
+no_dup <- gene_names[match(unique(gene_names$ENSEMBL), gene_names$ENSEMBL),]
+no_dup <- no_dup[match(unique(no_dup$SYMBOL), no_dup$SYMBOL),]
+
+genes.filter <- unique(no_dup$ENSEMBL[which(!(is.na(no_dup$SYMBOL)))])
+
+counts <- hbca@assays$RNA@counts[genes.filter,]
+
+rownames(counts) <- no_dup[which(!(is.na(no_dup$SYMBOL))),]$SYMBOL
+
+hbca_sub <- CreateSeuratObject(counts=counts)
+hbca_sub<-AddMetaData(hbca_sub,metadata=hbca@meta.data)
+
+hbca_sub <- NormalizeData(hbca_sub)
+hbca_sub <- FindVariableFeatures(hbca_sub)
+hbca_sub <- ScaleData(hbca_sub)
+hbca_sub <- RunPCA(hbca_sub)
+
 
 single_sample_label_transfer<-function(dat,ref_obj,ref_prefix){
   transfer.anchors <- FindTransferAnchors(
@@ -537,7 +570,7 @@ single_sample_label_transfer<-function(dat,ref_obj,ref_prefix){
   )
   predictions<- TransferData(
     anchorset = transfer.anchors,
-    refdata = ref_obj$celltype,
+    refdata = ref_obj$cell_type,
     k.weight = 25
   )
   colnames(predictions)<-paste0(ref_prefix,"_",colnames(predictions))
@@ -545,9 +578,9 @@ single_sample_label_transfer<-function(dat,ref_obj,ref_prefix){
   return(dat)
 }
 
-SO <- single_sample_label_transfer(SO, hbca, "HBCA")
+SO <- single_sample_label_transfer(SO, hbca_sub, "HBCA")
 
-CC_SO <- single_sample_label_transfer(CC_SO, hbca, "HBCA")
+CC_SO <- single_sample_label_transfer(CC_SO, hbca_sub, "HBCA")
 
 ## Save Seurat Object ##
 saveRDS(SO, io$out.file)
