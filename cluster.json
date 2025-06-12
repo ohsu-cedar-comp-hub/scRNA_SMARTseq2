@@ -3,7 +3,7 @@
     {
         "t" : "35:00:00",
         "N" : 1,
-        "partition" : "exacloud",
+        "partition" : "batch",
         "J" : "{rule}.{wildcards}",
         "o" : "logs/{rule}/{wildcards}_{rule}%j.out",
         "e" : "logs/{rule}/{wildcards}_{rule}%j.err",
