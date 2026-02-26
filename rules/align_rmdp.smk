@@ -1,7 +1,21 @@
+rule merge_fastqs:
+    input:
+        read1 = "samples/raw/{sample}_R1.fq.gz",
+        read2 = "samples/raw/{sample}_R2.fq.gz"
+    output:
+        temp("samples/merged/{sample}_R1.fq.gz"),
+        temp("samples/merged/{sample}_R2.fq.gz")
+    shell:
+        """
+        mkdir -p samples/merged
+        cat samples/raw/{wildcards.sample}*R1*.fq.gz > samples/merged/{wildcards.sample}_R1.fq.gz
+        cat samples/raw/{wildcards.sample}*R2*.fq.gz > samples/merged/{wildcards.sample}_R2.fq.gz
+        """
+
 rule trimming:
     input:
-        "samples/raw/{sample}_R1.fq.gz",
-	"samples/raw/{sample}_R2.fq.gz"
+        "samples/merged/{sample}_R1.fq.gz",
+	"samples/merged/{sample}_R2.fq.gz"
     output:
         "samples/trimmed/{sample}_R1_val_1.fq.gz",
 	"samples/trimmed/{sample}_R2_val_2.fq.gz",

@@ -107,7 +107,7 @@ if ("org.Hs.eg.db" %in% rownames(installed.packages()) == FALSE) {
 library(Seurat)
 library(data.table)
 library(purrr)
-library(scater)
+#library(scater)
 library(ggplot2)
 library(cowplot)
 library(png)

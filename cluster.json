@@ -10,6 +10,15 @@
         "c" : 4,
         "mem" : 45000
     },
+    "merge_fastqs" :
+    {
+        "t" : "3:00:00",
+        "J" : "merge_fastqs",
+        "o" : "logs/merge_fastqs/merge_fastqs%j.out",
+        "e" : "logs/merge_fastqs/merge_fastqs%j.err",
+        "c" : 1,
+        "mem" : 16000
+    },
     "trimming" :
     {
         "J" : "trimming",
